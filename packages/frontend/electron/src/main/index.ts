@@ -2,7 +2,9 @@ import './security-restrictions';
 
 import path from 'node:path';
 
+import { init, IPCMode } from '@sentry/electron/main';
 import { app } from 'electron';
+import { ipcMain } from 'electron/main';
 
 import { createApplicationMenu } from './application-menu/create';
 import { buildType, overrideSession } from './config';
@@ -63,6 +65,29 @@ app.on('activate', () => {
 });
 
 setupDeepLink(app);
+
+let isOnline = true;
+
+ipcMain.addListener('offline', () => {
+  isOnline = false;
+});
+
+ipcMain.addListener('online', () => {
+  isOnline = true;
+});
+
+// https://docs.sentry.io/platforms/javascript/guides/electron/
+if (process.env.SENTRY_DSN || environment.isDebug) {
+  init({
+    dsn: process.env.SENTRY_DSN,
+    ipcMode: IPCMode.Protocol,
+    transportOptions: {
+      maxQueueAgeDays: 30,
+      maxQueueCount: 100,
+      beforeSend: () => (isOnline ? 'send' : 'queue'),
+    },
+  });
+}
 
 /**
  * Create app window when background process will be ready
